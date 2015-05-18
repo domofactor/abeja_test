@@ -46,13 +46,9 @@ def parseCelebHTML(celeb,celeb_html):
 
   return celeb_dict[celeb]
 
-def formatCelebData(celeb_data):
+def formatCelebData(celeb_dict):
   import json
-  print json.dumps(celeb_data)
-
-def insetCelebJSON(celeb_json):
-  
-  
+  return json.dumps(celeb_dict)
 
 ########
 # Main #
@@ -63,13 +59,6 @@ celeb_dict = getCelebPath(parsed_html)
 
 
 for celeb in celeb_dict:
-  if 'Alexandra Burke' in celeb:
-    print('Celeb Found')
-    break
-  else:
-    celeb_html = getCelebData(celeb)
-    celeb_data = parseCelebHTML(celeb,celeb_html)
-
-celeb_json = formatCelebData(celeb_data)
-
-insertCelebJSON(celeb_json)
+  celeb_html = getCelebData(celeb)
+  celeb_data = parseCelebHTML(celeb,celeb_html)
+  celeb_json = formatCelebData(celeb_dict)
