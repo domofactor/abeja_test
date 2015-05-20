@@ -13,7 +13,7 @@ These can be installed via ```sudo pip install <pkg>```
 * sqlite3
 
 ##What does it do?
-This is a python script that pulls down a list of celebrities along with their various info such as Name,Birthplace, Description and an image. The image is uploaded to the ```abeja_test_celebrities``` S3 bucket and all celebrity data is stored into an SQLite database.
+This is a python script that pulls down a list of celebrities along with their various info such as Name,Birthplace, Description and an image. The image is uploaded to the [abeja_test_celebrities](https://s3.amazonaws.com/abeja_test_celebrities) S3 bucket and all celebrity data is stored into an SQLite database.
 
 ##How do I run it?
 simply run ```python abeja_test/celebs.py```
