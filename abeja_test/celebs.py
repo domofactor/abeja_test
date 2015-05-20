@@ -7,6 +7,7 @@ import copy
 import sqlite3
 import StringIO
 import boto
+import os
 
 #Pull down html page with celebrities a-z
 def getAllCelebs(baseurl):
@@ -132,7 +133,8 @@ def indexCelebs(sqlite_file,sqlite_table_name):
 ########
 #Lets populate some common vars
 baseurl = "http://www.posh24.com"
-sqlite_file = 'celebs.sqlite'
+cwd = os.getcwd()
+sqlite_file = cwd + '/celebs.sqlite'
 sqlite_table_name = 'celebs'
 
 #Parse page with list of celebs and generate a dict of names and paths

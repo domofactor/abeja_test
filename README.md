@@ -18,11 +18,12 @@ This is a python script that pulls down a list of celebrities along with their v
 thumbnail images are also uploaded to the ```abeja_test_celebrities``` S3 bucket.
 
 ##How do I run it?
-simply run ```python celebs.py```
+simply run ```python abeja_test/celebs.py```
 
 ##TODO
-* write tests
+* write tests using pytest or nose
 * Fix parsing age from celebrity html page. There seems to be some wierdness with parsing sub divs in beautifulsoup.
 * Improve performance(it takes roughly about 1.5hours to fully populate the DB)
 * Add a logger class/function to give the user better information about what's going on
+* convert directory structure into a python module
 * Write a RESTful service to pull data from SQlite based on a given name.
