@@ -22,5 +22,6 @@ simply run ```python celebs.py```
 
 ##TODO
 * Fix parsing age from celebrity html page. There seems to be some wierdness with parsing sub divs in beautifulsoup.
-* Improve performance(it takes roughly 30min to run)
+* Improve performance(it takes roughly about 1.5hours to fully populate the DB)
+* Add a logger class/function to give the user better information about what's going on
 * Write a RESTful service to pull data from SQlite based on a given name.
