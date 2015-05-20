@@ -5,6 +5,8 @@ import re
 import json
 import copy
 import sqlite3
+import StringIO
+import boto
 
 def percentage(part, whole):
   return 100 * float(part)/float(whole)
@@ -55,47 +57,77 @@ def parseCeleb(celeb,celeb_html):
 
   return celeb_data[celeb]
 
+def CelebThumbToS3(celeb):
+  bucket_name = 'abeja_test_celebrities'
+  
+  #Save URL of Thumbnail to a StringIO instead of saving to disk
+  thumb_url = celeb_data[celeb]['thumb']
+  key_name = celeb_data[celeb]['path'].replace("/","") + '.jpg'
+  r = requests.get(thumb_url)
+  thumb_img = StringIO.StringIO(r.content)
+
+  #Connect to S3
+  conn = boto.connect_s3() 
+
+  #Grab the Bucket we want to use
+  try:
+    bucket = conn.get_bucket(bucket_name)
+  except boto.exception.S3ResponseError:
+    conn.create_bucket(bucket_name)
+
+  #Upload thumbnail to S3 and return public url
+  key = boto.s3.key.Key(bucket)
+  key.name = key_name
+  key.set_contents_from_string(thumb_img.getvalue(), headers={"Content-Type": "image/jpeg"})
+  key.make_public()
+  url = key.generate_url(expires_in=0, query_auth=False)
+  return url
+
 #Format the Celebrity dict into json so we can push it into SQLITE nicely
-def formatCelebs(celeb_data):
-  return json.dumps(celeb_data)
+def formatCeleb(celeb_data,celeb):
+  data = celeb_data[celeb]
+  jdata = json.dumps(data)
+  return jdata
 
 #Create the celebs DB and table
 def createCelebsDB(sqlite_file,sqlite_table_name):
-  print "=> Creating required SQLite DB and table!"
-  sleep(1)
   conn = sqlite3.connect(sqlite_file)
   c = conn.cursor()
 
-  query = 'CREATE TABLE %s (name text primary key,born text,desc text,thumb text,path text);' % (sqlite_table_name)
-  print query
+  query = 'CREATE TABLE %s (name text primary key,born text,desc text,thumb text,path text,s3_path text);' % (sqlite_table_name)
   c.execute(query)
   conn.commit()
   conn.close()
 
 #Populate celebs table with celebrities data
-def insertCelebs(celeb_json,sqlite_file,sqlite_table_name):
-  print "=> inserting Celebs into table"
-  sleep(1)
+def insertCelebs(celeb_json,celeb,sqlite_file,sqlite_table_name):
   # Connecting to the database file
   conn = sqlite3.connect(sqlite_file)
   c = conn.cursor()
 
   jdata = json.loads(celeb_json)
 
-  for celeb,data in jdata.iteritems():
-    columns = ', '.join(data.keys())
-    placeholders = ''+'\",\"'.join(data.values())
-    query = 'INSERT INTO %s (name, %s) VALUES (\"%s\",\"%s\");' % (sqlite_table_name,columns,celeb,placeholders)
-    print query
-    c.execute(query, data)
-    conn.commit()
+  columns = ', '.join(jdata.keys())
+  data = ''+'\",\"'.join(jdata.values())
+  query = 'INSERT INTO %s (name, %s) VALUES (\"%s\",\"%s\");' % (sqlite_table_name,columns,celeb,data)
+  c.execute(query)
+  conn.commit()
+  conn.close()
 
+def cleanupCelebs(celeb,sqlite_file,sqlite_table_name):
+  sqlite_column_name = 'name'
+
+  # Connecting to the database file
+  conn = sqlite3.connect(sqlite_file)
+  c = conn.cursor()
+
+  query = 'DELETE FROM %s WHERE %s = \"%s\";' % (sqlite_table_name,sqlite_column_name,celeb)
+  c.execute(query)
+  conn.commit()
   conn.close()
 
 #Build an index based on the populated celebs table
 def indexCelebs(sqlite_file,sqlite_table_name):
-  print "Create Unique Index on celebs table"
-  sleep(1)
   sqlite_index_name = 'celebs_index'
   sqlite_column_name = 'name'
 
@@ -104,7 +136,6 @@ def indexCelebs(sqlite_file,sqlite_table_name):
   c = conn.cursor()
 
   query = 'CREATE UNIQUE INDEX %s ON %s(%s);' % (sqlite_index_name,sqlite_table_name,sqlite_column_name)
-  print query
   c.execute(query)
   conn.commit()
   conn.close()
@@ -113,12 +144,13 @@ def indexCelebs(sqlite_file,sqlite_table_name):
 # Main #
 ########
 baseurl = "http://www.posh24.com"
+sqlite_file = 'celebs.sqlite'
+sqlite_table_name = 'celebs'
 parsed_html = getAllCelebs(baseurl)
 celeb_dict = parseCelebsPath(parsed_html)
 celeb_data = copy.deepcopy(celeb_dict)
 count=0
 
-print "=> Downloading and Parsing Celebrity Data"
 for celeb in celeb_dict:
   celeb_total = len(celeb_data)
   try:
@@ -127,17 +159,17 @@ for celeb in celeb_dict:
     print "%s [%d/%d] %.2f%%" % (celeb,count,celeb_total,percent_complete)
     celeb_html = getCeleb(celeb)
     celeb_parsed = parseCeleb(celeb,celeb_html)
+    s3_path = CelebThumbToS3(celeb)
+    celeb_data[celeb]['s3_path'] = s3_path
+    celeb_json = formatCeleb(celeb_data,celeb)
+
+    createCelebsDB(sqlite_file,sqlite_table_name)
+    insertCelebs(celeb_json,celeb,sqlite_file,sqlite_table_name)
   except AttributeError:
     celeb_data.pop(celeb, None) #Not a Celebrity, removing from dictionary
     count -=1
+  except sqlite3.OperationalError:
+    cleanupCelebs(celeb,sqlite_file,sqlite_table_name)
+    insertCelebs(celeb_json,celeb,sqlite_file,sqlite_table_name)
 
-celeb_json = formatCelebs(celeb_data)
-
-# Store celebrity data in SQlite
-try:
-  sqlite_file = 'celebs2.sqlite'
-  sqlite_table_name = 'celebs'
-  createCelebsDB(sqlite_file,sqlite_table_name)
-except sqlite3.OperationalError:
-  insertCelebs(celeb_json,sqlite_file,sqlite_table_name)
-  indexCelebs(sqlite_file,sqlite_table_name)
+indexCelebs(sqlite_file,sqlite_table_name)
