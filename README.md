@@ -21,6 +21,7 @@ thumbnail images are also uploaded to the ```abeja_test_celebrities``` S3 bucket
 simply run ```python celebs.py```
 
 ##TODO
+* write tests
 * Fix parsing age from celebrity html page. There seems to be some wierdness with parsing sub divs in beautifulsoup.
 * Improve performance(it takes roughly about 1.5hours to fully populate the DB)
 * Add a logger class/function to give the user better information about what's going on
