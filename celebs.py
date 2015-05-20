@@ -8,9 +8,6 @@ import sqlite3
 import StringIO
 import boto
 
-def percentage(part, whole):
-  return 100 * float(part)/float(whole)
-
 #Pull down html page with celebrities a-z
 def getAllCelebs(baseurl):
   r = requests.get(baseurl + "/celebrities/a_to_z")
@@ -93,7 +90,6 @@ def formatCeleb(celeb_data,celeb):
 def createCelebsDB(sqlite_file,sqlite_table_name):
   conn = sqlite3.connect(sqlite_file)
   c = conn.cursor()
-
   query = 'CREATE TABLE %s (name text primary key,born text,desc text,thumb text,path text,s3_path text);' % (sqlite_table_name)
   c.execute(query)
   conn.commit()
@@ -101,12 +97,9 @@ def createCelebsDB(sqlite_file,sqlite_table_name):
 
 #Populate celebs table with celebrities data
 def insertCelebs(celeb_json,celeb,sqlite_file,sqlite_table_name):
-  # Connecting to the database file
   conn = sqlite3.connect(sqlite_file)
   c = conn.cursor()
-
   jdata = json.loads(celeb_json)
-
   columns = ', '.join(jdata.keys())
   data = ''+'\",\"'.join(jdata.values())
   query = 'INSERT INTO %s (name, %s) VALUES (\"%s\",\"%s\");' % (sqlite_table_name,columns,celeb,data)
@@ -116,11 +109,8 @@ def insertCelebs(celeb_json,celeb,sqlite_file,sqlite_table_name):
 
 def cleanupCelebs(celeb,sqlite_file,sqlite_table_name):
   sqlite_column_name = 'name'
-
-  # Connecting to the database file
   conn = sqlite3.connect(sqlite_file)
   c = conn.cursor()
-
   query = 'DELETE FROM %s WHERE %s = \"%s\";' % (sqlite_table_name,sqlite_column_name,celeb)
   c.execute(query)
   conn.commit()
@@ -130,11 +120,8 @@ def cleanupCelebs(celeb,sqlite_file,sqlite_table_name):
 def indexCelebs(sqlite_file,sqlite_table_name):
   sqlite_index_name = 'celebs_index'
   sqlite_column_name = 'name'
-
-  # Connecting to the database file
   conn = sqlite3.connect(sqlite_file)
   c = conn.cursor()
-
   query = 'CREATE UNIQUE INDEX %s ON %s(%s);' % (sqlite_index_name,sqlite_table_name,sqlite_column_name)
   c.execute(query)
   conn.commit()
@@ -143,33 +130,54 @@ def indexCelebs(sqlite_file,sqlite_table_name):
 ########
 # Main #
 ########
+#Lets populate some common vars
 baseurl = "http://www.posh24.com"
 sqlite_file = 'celebs.sqlite'
 sqlite_table_name = 'celebs'
+
+#Parse page with list of celebs and generate a dict of names and paths
 parsed_html = getAllCelebs(baseurl)
 celeb_dict = parseCelebsPath(parsed_html)
+
+#make a copy of the celeb dict so we can modify it while iterating through the original
 celeb_data = copy.deepcopy(celeb_dict)
+
+#Iterate over each celebrity
 count=0
 
 for celeb in celeb_dict:
+  #Grab an overall total so we can display progress
   celeb_total = len(celeb_data)
+
   try:
+    #Counter and display progress to the user
     count +=1
     percent_complete = 100.0 * count / celeb_total
     print "%s [%d/%d] %.2f%%" % (celeb,count,celeb_total,percent_complete)
+
+    #Begin parsing for celeb data
     celeb_html = getCeleb(celeb)
     celeb_parsed = parseCeleb(celeb,celeb_html)
+
+    #Upload thumbnail image to s3
     s3_path = CelebThumbToS3(celeb)
     celeb_data[celeb]['s3_path'] = s3_path
+
+    #Format the celeb data into json so we can work with it nicely
     celeb_json = formatCeleb(celeb_data,celeb)
 
+    #Insert celeb data into SQLite DB
     createCelebsDB(sqlite_file,sqlite_table_name)
     insertCelebs(celeb_json,celeb,sqlite_file,sqlite_table_name)
+
+  #There's several pages that are in fact not celebrities, so lets remove those from the celebs dictionary
   except AttributeError:
     celeb_data.pop(celeb, None) #Not a Celebrity, removing from dictionary
     count -=1
+  #Do some cleanup on the celebrities row if SQlite barfs due to a row already existing(no duplicates allowed due to the name column being a primary key)
   except sqlite3.OperationalError:
     cleanupCelebs(celeb,sqlite_file,sqlite_table_name)
     insertCelebs(celeb_json,celeb,sqlite_file,sqlite_table_name)
 
+#Once all celebs have been parsed and uploaded, create a unique index on the DB for better search performance
 indexCelebs(sqlite_file,sqlite_table_name)
