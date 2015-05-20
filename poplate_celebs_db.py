@@ -118,6 +118,7 @@ celeb_dict = parseCelebsPath(parsed_html)
 celeb_data = copy.deepcopy(celeb_dict)
 count=0
 
+print "=> Downloading and Parsing Celebrity Data"
 for celeb in celeb_dict:
   celeb_total = len(celeb_data)
   try:
